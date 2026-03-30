@@ -7,6 +7,7 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
+from datetime import date, timedelta
 import sys
 import os
 
@@ -49,20 +50,17 @@ if os.path.exists(css_path):
 
 
 # ── Session state ────────────────────────────────────────────────────────────
-if "results_ready" not in st.session_state:
-    st.session_state.results_ready = False
-if "raw_df" not in st.session_state:
-    st.session_state.raw_df = pd.DataFrame()
-if "query_lat" not in st.session_state:
-    st.session_state.query_lat = None
-if "query_lon" not in st.session_state:
-    st.session_state.query_lon = None
-if "query_buffer" not in st.session_state:
-    st.session_state.query_buffer = None
-if "clicked_lat" not in st.session_state:
-    st.session_state.clicked_lat = None
-if "clicked_lon" not in st.session_state:
-    st.session_state.clicked_lon = None
+for key, default in {
+    "results_ready": False,
+    "raw_df": pd.DataFrame(),
+    "query_lat": None,
+    "query_lon": None,
+    "query_buffer": None,
+    "clicked_lat": None,
+    "clicked_lon": None,
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
 
 
 # ── Sidebar ──────────────────────────────────────────────────────────────────
@@ -87,27 +85,58 @@ if input_method == "Enter coordinates":
         step=0.01, format="%.4f",
     )
 else:
-    # Use clicked coordinates if available, otherwise defaults
     lat = st.session_state.clicked_lat or 46.95
     lon = st.session_state.clicked_lon or 7.45
     if st.session_state.clicked_lat:
         st.sidebar.info(f"Selected: {lat:.4f}, {lon:.4f}")
     else:
-        st.sidebar.info("Click on the map below to set coordinates.")
+        st.sidebar.info("Click the map below to set coordinates.")
 
-st.sidebar.markdown("**Search radius**")
-buffer_km = st.sidebar.select_slider(
-    "Radius (km)",
-    options=[1, 2, 3, 5, 10, 15, 20, 30, 50],
+st.sidebar.markdown("**Search radius (km)**")
+buffer_km = st.sidebar.number_input(
+    "Radius",
+    min_value=1,
+    max_value=200,
     value=5,
+    step=1,
     label_visibility="collapsed",
 )
-st.sidebar.caption(f"{buffer_km} km around the selected point")
 
 st.sidebar.markdown("---")
-st.sidebar.markdown("**Settings**")
-max_records = st.sidebar.slider(
-    "Maximum records", 100, 2000, 500, step=100,
+st.sidebar.markdown("## FILTERS")
+
+st.sidebar.markdown("**Date range**")
+use_dates = st.sidebar.checkbox("Filter by date", value=False)
+date_from = None
+date_to = None
+if use_dates:
+    col_d1, col_d2 = st.sidebar.columns(2)
+    date_from_val = col_d1.date_input(
+        "From",
+        value=date(2020, 1, 1),
+        min_value=date(1900, 1, 1),
+        max_value=date.today(),
+    )
+    date_to_val = col_d2.date_input(
+        "To",
+        value=date.today(),
+        min_value=date(1900, 1, 1),
+        max_value=date.today(),
+    )
+    date_from = date_from_val.isoformat()
+    date_to = date_to_val.isoformat()
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("## SETTINGS")
+
+st.sidebar.markdown("**Maximum records to fetch**")
+max_records = st.sidebar.number_input(
+    "Max records",
+    min_value=100,
+    max_value=5000,
+    value=500,
+    step=100,
+    label_visibility="collapsed",
 )
 
 run_query = st.sidebar.button(
@@ -129,7 +158,6 @@ st.markdown("---")
 # ── Map input ────────────────────────────────────────────────────────────────
 if input_method == "Click on map":
     m = folium.Map(location=[lat, lon], zoom_start=5, tiles="CartoDB positron")
-    # Show existing clicked point if any
     if st.session_state.clicked_lat:
         folium.Marker(
             [st.session_state.clicked_lat, st.session_state.clicked_lon],
@@ -152,17 +180,27 @@ if input_method == "Click on map":
 
 # ── Run query ────────────────────────────────────────────────────────────────
 if run_query:
+    date_info = ""
+    if date_from and date_to:
+        date_info = f" | {date_from} to {date_to}"
+
     with st.spinner(
-        f"Querying GBIF within {buffer_km} km of ({lat:.4f}, {lon:.4f})..."
+        f"Querying GBIF within {buffer_km} km of "
+        f"({lat:.4f}, {lon:.4f}){date_info}..."
     ):
         raw_df = query_species_in_area(
-            lat, lon, buffer_km=buffer_km, limit=min(max_records, 300),
+            lat, lon,
+            buffer_km=buffer_km,
+            limit=min(max_records, 300),
+            date_from=date_from,
+            date_to=date_to,
         )
 
     if raw_df.empty:
         st.warning(
             "No species occurrences found. "
-            "Try increasing the search radius or adjusting coordinates."
+            "Try increasing the search radius, adjusting coordinates, "
+            "or expanding the date range."
         )
         st.session_state.results_ready = False
     else:
@@ -180,7 +218,9 @@ if st.session_state.results_ready:
     q_lon = st.session_state.query_lon
     q_buffer = st.session_state.query_buffer
 
-    summary_df = get_species_summary(raw_df)
+    with st.spinner("Analyzing species data and fetching common names..."):
+        summary_df = get_species_summary(raw_df)
+
     stats = compute_overview_stats(raw_df, summary_df)
     threatened_df = get_iucn_threatened(summary_df)
     invasive_df = get_invasive_species(summary_df)
@@ -229,27 +269,19 @@ if st.session_state.results_ready:
             location=[q_lat, q_lon], zoom_start=11, tiles="CartoDB positron",
         )
         folium.Circle(
-            location=[q_lat, q_lon],
-            radius=q_buffer * 1000,
-            color="#1a5c2e",
-            fill=True,
-            fill_opacity=0.06,
-            weight=2,
+            location=[q_lat, q_lon], radius=q_buffer * 1000,
+            color="#1a5c2e", fill=True, fill_opacity=0.06, weight=2,
         ).add_to(occ_map)
         folium.Marker(
-            [q_lat, q_lon],
-            popup="Search center",
+            [q_lat, q_lon], popup="Search center",
             icon=folium.Icon(color="darkgreen", icon="circle", prefix="fa"),
         ).add_to(occ_map)
 
         for _, row in map_df.head(500).iterrows():
             folium.CircleMarker(
                 location=[row["decimalLatitude"], row["decimalLongitude"]],
-                radius=3,
-                color="#1a4a6b",
-                fill=True,
-                fill_opacity=0.5,
-                weight=0.5,
+                radius=3, color="#1a4a6b", fill=True,
+                fill_opacity=0.5, weight=0.5,
                 popup=(
                     f"<b>{row.get('species', '')}</b><br>"
                     f"{row.get('observationType', '')}<br>"
@@ -259,25 +291,23 @@ if st.session_state.results_ready:
 
         st_folium(occ_map, width=None, height=480, key="result_map")
 
-    # ── Threatened species ───────────────────────────────────────────────
+    # ── Threatened ───────────────────────────────────────────────────────
     if not threatened_df.empty:
         st.markdown("---")
         st.markdown("### Threatened species (IUCN)")
         cols = ["species", "common_name", "class", "family", "iucn_status", "iucn_label", "observation_count"]
-        available = [c for c in cols if c in threatened_df.columns]
         st.dataframe(
-            threatened_df[available].reset_index(drop=True),
+            threatened_df[[c for c in cols if c in threatened_df.columns]].reset_index(drop=True),
             use_container_width=True, hide_index=True,
         )
 
-    # ── Invasive species ─────────────────────────────────────────────────
+    # ── Invasive ─────────────────────────────────────────────────────────
     if not invasive_df.empty:
         st.markdown("---")
         st.markdown("### Invasive and introduced species")
         cols = ["species", "common_name", "class", "family", "establishment_label", "observation_count"]
-        available = [c for c in cols if c in invasive_df.columns]
         st.dataframe(
-            invasive_df[available].reset_index(drop=True),
+            invasive_df[[c for c in cols if c in invasive_df.columns]].reset_index(drop=True),
             use_container_width=True, hide_index=True,
         )
 
@@ -289,9 +319,8 @@ if st.session_state.results_ready:
         "iucn_label", "establishment_label",
         "observation_count", "first_observed", "last_observed",
     ]
-    available = [c for c in display_cols if c in summary_df.columns]
     st.dataframe(
-        summary_df[available].reset_index(drop=True),
+        summary_df[[c for c in display_cols if c in summary_df.columns]].reset_index(drop=True),
         use_container_width=True, hide_index=True, height=400,
     )
 
@@ -335,4 +364,4 @@ else:
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.caption("Data: GBIF (gbif.org) | EcoIntel v0.3")
+st.caption("Data: GBIF (gbif.org) | EcoIntel v0.4")

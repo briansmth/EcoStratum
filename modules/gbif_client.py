@@ -54,11 +54,11 @@ def point_to_bbox(lat: float, lon: float, buffer_km: float) -> dict:
 
 def fetch_common_names(species_list: list) -> dict:
     """
-    Look up common names (vernacularName) from GBIF Species API.
-    Returns dict mapping scientific name -> common name.
+    Look up common names from GBIF Species API.
+    Returns dict: scientific name -> common name.
     """
     names = {}
-    for sp in species_list[:200]:  # cap to avoid too many requests
+    for sp in species_list[:150]:
         try:
             resp = requests.get(
                 f"{GBIF_API}/species/match",
@@ -67,9 +67,31 @@ def fetch_common_names(species_list: list) -> dict:
             )
             if resp.ok:
                 data = resp.json()
+                # Try vernacularName from match
                 vn = data.get("vernacularName", "")
                 if vn:
                     names[sp] = vn
+                    continue
+                # Try species detail endpoint for vernacular names
+                usage_key = data.get("usageKey")
+                if usage_key:
+                    vn_resp = requests.get(
+                        f"{GBIF_API}/species/{usage_key}/vernacularNames",
+                        params={"limit": 5},
+                        timeout=5,
+                    )
+                    if vn_resp.ok:
+                        vn_data = vn_resp.json().get("results", [])
+                        # Prefer English, then French, then first available
+                        for lang in ["eng", "en", "fra", "fr"]:
+                            for item in vn_data:
+                                if item.get("language", "").lower().startswith(lang[:2]):
+                                    names[sp] = item["vernacularName"]
+                                    break
+                            if sp in names:
+                                break
+                        if sp not in names and vn_data:
+                            names[sp] = vn_data[0].get("vernacularName", "")
         except requests.RequestException:
             continue
     return names
@@ -81,6 +103,8 @@ def query_species_in_area(
     buffer_km: float = 10.0,
     limit: int = 300,
     country_code: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ) -> pd.DataFrame:
     bbox = point_to_bbox(lat, lon, buffer_km)
 
@@ -95,6 +119,14 @@ def query_species_in_area(
 
     if country_code:
         params["country"] = country_code
+
+    # Date filter: GBIF uses eventDate with range syntax "2020-01-01,2024-12-31"
+    if date_from and date_to:
+        params["eventDate"] = f"{date_from},{date_to}"
+    elif date_from:
+        params["eventDate"] = f"{date_from},*"
+    elif date_to:
+        params["eventDate"] = f"*,{date_to}"
 
     all_results = []
     total_fetched = 0
@@ -131,6 +163,7 @@ def query_species_in_area(
     for r in all_results:
         iucn_code = r.get("iucnRedListCategory") or ""
         estab_raw = r.get("establishmentMeans") or ""
+        ind_count = r.get("individualCount")
 
         row = {
             "scientificName": r.get("species") or r.get("scientificName") or "",
@@ -158,7 +191,8 @@ def query_species_in_area(
             "observationType": BASIS_OF_RECORD_MAP.get(
                 r.get("basisOfRecord", ""), "Unknown"
             ),
-            "individualCount": r.get("individualCount") or "",
+            # Fix: ensure individualCount is always string to avoid Arrow error
+            "individualCount": str(int(ind_count)) if ind_count is not None else "",
             "recordedBy": r.get("recordedBy") or "",
             "datasetName": r.get("datasetName") or "",
             "institutionCode": r.get("institutionCode") or "",
@@ -166,7 +200,7 @@ def query_species_in_area(
             "stateProvince": r.get("stateProvince") or "",
             "locality": r.get("locality") or "",
             "occurrenceID": r.get("occurrenceID") or "",
-            "gbifID": r.get("gbifID") or "",
+            "gbifID": str(r.get("gbifID", "")),
         }
         rows.append(row)
 
@@ -197,29 +231,26 @@ def get_species_summary(df: pd.DataFrame) -> pd.DataFrame:
         .sort_values("observation_count", ascending=False)
     )
 
-    # Try to fill missing common names from GBIF Species API
-    missing_names = summary[
+    # Fetch missing common names from GBIF Species API
+    missing = summary[
         summary["common_name"].fillna("").str.strip() == ""
     ]["species"].tolist()
 
-    if missing_names:
-        name_lookup = fetch_common_names(missing_names)
+    if missing:
+        lookup = fetch_common_names(missing)
         summary["common_name"] = summary.apply(
             lambda row: row["common_name"]
             if str(row["common_name"]).strip()
-            else name_lookup.get(row["species"], ""),
+            else lookup.get(row["species"], ""),
             axis=1,
         )
 
-    # Convert year columns to int to avoid "2,025" formatting
+    # Force year columns to int (avoids "2,025" comma formatting)
     for col in ["first_observed", "last_observed"]:
         if col in summary.columns:
-            summary[col] = (
-                summary[col]
-                .dropna()
-                .astype(int)
-                .reindex(summary.index)
-            )
+            summary[col] = pd.to_numeric(summary[col], errors="coerce")
+            mask = summary[col].notna()
+            summary.loc[mask, col] = summary.loc[mask, col].astype(int)
 
     return summary
 

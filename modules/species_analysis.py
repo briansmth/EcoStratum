@@ -66,12 +66,10 @@ def observations_by_year(raw_df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
     result = (
         raw_df.dropna(subset=["year"])
-        .groupby("year")
-        .size()
+        .groupby("year").size()
         .reset_index(name="observations")
         .sort_values("year")
     )
-    # Ensure year is integer
     result["year"] = result["year"].astype(int)
     return result
 
@@ -81,16 +79,12 @@ def iucn_breakdown(summary_df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     label_map = {
-        "LC": "Least Concern",
-        "NT": "Near Threatened",
-        "VU": "Vulnerable",
-        "EN": "Endangered",
-        "CR": "Critically Endangered",
-        "DD": "Data Deficient",
+        "LC": "Least Concern", "NT": "Near Threatened",
+        "VU": "Vulnerable", "EN": "Endangered",
+        "CR": "Critically Endangered", "DD": "Data Deficient",
         "NE": "Not Evaluated",
     }
 
-    # Filter out empty/blank statuses — don't show "Unknown"
     filtered = summary_df["iucn_status"].replace("", pd.NA).dropna()
     if filtered.empty:
         return pd.DataFrame()
