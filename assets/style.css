@@ -1,0 +1,72 @@
+/* EcoIntel — Professional styling */
+
+h1 {
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    color: #1a1a1a !important;
+}
+
+h3 {
+    font-weight: 600 !important;
+    color: #2a2a2a !important;
+    border-bottom: 2px solid #e8ece8;
+    padding-bottom: 8px;
+}
+
+div[data-testid="stMetric"] {
+    background-color: #f5f7f5;
+    border-radius: 6px;
+    padding: 14px 16px;
+    border-left: 3px solid #1a5c2e;
+}
+
+div[data-testid="stMetric"] label {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #555 !important;
+}
+
+div[data-testid="stMetric"] [data-testid="stMetricValue"] {
+    font-size: 1.6rem !important;
+    font-weight: 700 !important;
+    color: #1a1a1a !important;
+}
+
+section[data-testid="stSidebar"] {
+    background-color: #f8faf8;
+    border-right: 1px solid #dde3dd;
+}
+
+section[data-testid="stSidebar"] h2 {
+    font-size: 1.1rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #1a5c2e !important;
+}
+
+button[kind="primary"] {
+    background-color: #1a5c2e !important;
+    border: none !important;
+    font-weight: 600 !important;
+}
+
+button[kind="primary"]:hover {
+    background-color: #144723 !important;
+}
+
+div[data-testid="stDataFrame"] {
+    border: 1px solid #e0e4e0;
+    border-radius: 4px;
+}
+
+button[data-testid="stDownloadButton"] {
+    border: 1px solid #1a5c2e !important;
+    color: #1a5c2e !important;
+    font-weight: 600 !important;
+}
+
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
