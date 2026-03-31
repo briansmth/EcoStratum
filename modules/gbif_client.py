@@ -4,6 +4,7 @@ GBIF Occurrence API client.
 
 import requests
 import pandas as pd
+import streamlit as st
 from typing import Optional
 import math
 
@@ -52,6 +53,7 @@ def point_to_bbox(lat: float, lon: float, buffer_km: float) -> dict:
     }
 
 
+@st.cache_data(ttl=86400)
 def fetch_common_names(species_list: list) -> dict:
     """
     Look up common names from GBIF Species API.
@@ -97,6 +99,7 @@ def fetch_common_names(species_list: list) -> dict:
     return names
 
 
+@st.cache_data(ttl=86400)
 def query_species_in_area(
     lat: float,
     lon: float,
@@ -211,6 +214,7 @@ def query_species_in_area(
     return df
 
 
+@st.cache_data(ttl=86400)
 def get_species_summary(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame()

@@ -1,5 +1,5 @@
 """
-Chart builders for the EcoIntel dashboard.
+Chart builders for the EcoStratum dashboard.
 """
 
 import plotly.express as px

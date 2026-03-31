@@ -1,5 +1,5 @@
 """
-EcoIntel — Species & Habitat Quick-Screener
+EcoStratum — Ecological Site Screener
 Run with: streamlit run app/main.py
 """
 
@@ -37,8 +37,8 @@ from modules.charts import (
 
 # ── Page config ──────────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="EcoIntel — Species Screener",
-    page_icon="🌿",
+    page_title="EcoStratum",
+    page_icon="E",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -145,8 +145,8 @@ run_query = st.sidebar.button(
 
 
 # ── Header ───────────────────────────────────────────────────────────────────
-st.markdown("# EcoIntel")
-st.markdown("##### Species & Habitat Quick-Screener")
+st.markdown("# EcoStratum")
+st.markdown("##### Ecological Site Screener")
 st.markdown(
     "Enter coordinates or click the map to define a site, set a search radius, "
     "and generate an ecological screening of all recorded species. "
@@ -333,7 +333,7 @@ if st.session_state.results_ready:
         st.download_button(
             "Download species summary (CSV)",
             data=summary_df.to_csv(index=False),
-            file_name=f"ecointel_summary_{q_lat:.2f}_{q_lon:.2f}_{q_buffer}km.csv",
+            file_name=f"ecostratum_summary_{q_lat:.2f}_{q_lon:.2f}_{q_buffer}km.csv",
             mime="text/csv",
         )
     with dl2:
@@ -341,7 +341,7 @@ if st.session_state.results_ready:
             st.download_button(
                 "Download detailed observations (CSV)",
                 data=detailed_export.to_csv(index=False),
-                file_name=f"ecointel_detailed_{q_lat:.2f}_{q_lon:.2f}_{q_buffer}km.csv",
+                file_name=f"ecostratum_detailed_{q_lat:.2f}_{q_lon:.2f}_{q_buffer}km.csv",
                 mime="text/csv",
             )
 
@@ -364,4 +364,4 @@ else:
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.caption("Data: GBIF (gbif.org) | EcoIntel v0.4")
+st.caption("Data: GBIF (gbif.org) | EcoStratum v0.5")
