@@ -27,7 +27,8 @@ LAYOUT_DEFAULTS = dict(
     font=dict(family="Source Sans Pro, sans-serif", size=13, color="#2a2a2a"),
     paper_bgcolor="rgba(0,0,0,0)",
     plot_bgcolor="rgba(0,0,0,0)",
-    margin=dict(l=20, r=20, t=44, b=20),
+    margin=dict(l=20, r=20, t=48, b=20),
+    title=dict(font=dict(size=14, color="#2a2a2a"), x=0, xanchor="left"),
 )
 
 
@@ -43,7 +44,7 @@ def species_by_group_chart(group_df: pd.DataFrame) -> go.Figure:
         labels={"species_count": "Number of species", "class": ""},
     )
     fig.update_layout(
-        title="Species by taxonomic group",
+        title="Species Richness by Taxonomic Class",
         height=max(300, len(df) * 30),
         **LAYOUT_DEFAULTS,
     )
@@ -63,11 +64,11 @@ def iucn_breakdown_chart(iucn_df: pd.DataFrame) -> go.Figure:
             labels=iucn_df["label"], values=iucn_df["count"],
             hole=0.45, marker=dict(colors=colors),
             textinfo="label+value", textposition="outside",
-            textfont=dict(size=12),
+            textfont=dict(size=11),
         )
     )
     fig.update_layout(
-        title="IUCN Red List breakdown",
+        title="IUCN Red List Classification",
         height=400, showlegend=False, **LAYOUT_DEFAULTS,
     )
     return fig
@@ -80,9 +81,12 @@ def observations_timeline_chart(timeline_df: pd.DataFrame) -> go.Figure:
     fig = px.area(
         timeline_df, x="year", y="observations",
         color_discrete_sequence=[COLORS["secondary"]],
-        labels={"year": "Year", "observations": "Observations"},
+        labels={"year": "Year", "observations": "Obs."},
     )
-    fig.update_layout(title="Observations over time", height=300, **LAYOUT_DEFAULTS)
+    fig.update_layout(
+        title="Temporal Distribution of Observations",
+        height=300, **LAYOUT_DEFAULTS,
+    )
     fig.update_xaxes(gridcolor="#e8e8e8", dtick=1, tickformat="d")
     fig.update_yaxes(gridcolor="#e8e8e8")
     return fig
@@ -95,7 +99,6 @@ def top_species_chart(top_df: pd.DataFrame) -> go.Figure:
 
     df = top_df.sort_values("observation_count", ascending=True).tail(20).copy()
 
-    # Build label: "Common Name (Scientific)" or just "Scientific"
     def make_label(row):
         cn = str(row.get("common_name", "")).strip()
         sp = str(row.get("species", "")).strip()
@@ -113,7 +116,7 @@ def top_species_chart(top_df: pd.DataFrame) -> go.Figure:
         labels={"observation_count": "Observations", "label": ""},
     )
     fig.update_layout(
-        title="Most observed species",
+        title="Top Species by Observation Count",
         height=max(400, len(df) * 28),
         **LAYOUT_DEFAULTS,
     )

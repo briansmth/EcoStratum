@@ -33,6 +33,63 @@ from modules.charts import (
     observations_timeline_chart,
     top_species_chart,
 )
+from modules.supabase_client import (
+    sign_up,
+    sign_in,
+    sign_out,
+    save_search,
+    get_search_history,
+)
+
+
+# ── Column label mapping for display tables ─────────────────────────────────
+COLUMN_LABELS = {
+    "species": "Species",
+    "common_name": "Common Name",
+    "class": "Class",
+    "order": "Order",
+    "family": "Family",
+    "iucn_status": "IUCN Code",
+    "iucn_label": "IUCN Status",
+    "observation_count": "Observations",
+    "first_observed": "First Observed",
+    "last_observed": "Last Observed",
+    "establishment_label": "Establishment",
+}
+
+
+def _display_df(df, cols):
+    """Prepare a dataframe for display: select columns, fix years, rename."""
+    available = [c for c in cols if c in df.columns]
+    out = df[available].reset_index(drop=True).copy()
+    for col in ["first_observed", "last_observed"]:
+        if col in out.columns:
+            out[col] = out[col].apply(
+                lambda v: str(int(v)) if pd.notna(v) else ""
+            )
+    return out.rename(columns=COLUMN_LABELS)
+
+
+def add_tile_layers(m):
+    """Add multiple base map layers and a layer control toggle."""
+    folium.TileLayer(
+        tiles="https://cartodb-basemaps-a.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png",
+        attr='&copy; <a href="https://carto.com/">CARTO</a>',
+        name="Light Map",
+        show=True,
+    ).add_to(m)
+    folium.TileLayer("OpenStreetMap", name="Street Map").add_to(m)
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attr="Tiles &copy; Esri",
+        name="Satellite",
+    ).add_to(m)
+    folium.TileLayer(
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        attr="Tiles &copy; Esri",
+        name="Topographic",
+    ).add_to(m)
+    folium.LayerControl(collapsed=True).add_to(m)
 
 
 # ── Page config ──────────────────────────────────────────────────────────────
@@ -58,12 +115,138 @@ for key, default in {
     "query_buffer": None,
     "clicked_lat": None,
     "clicked_lon": None,
+    "authenticated": False,
+    "user_id": None,
+    "user_email": None,
 }.items():
     if key not in st.session_state:
         st.session_state[key] = default
 
 
+# ── Auth gate ───────────────────────────────────────────────────────────────
+if not st.session_state.authenticated:
+    st.markdown(
+        '<div class="eco-login-hero">'
+        '<h1 class="eco-hero-title">EcoStratum</h1>'
+        '<p class="eco-hero-tagline">Ecological Site Screener</p>'
+        '<p class="eco-hero-desc">'
+        "Screen any location on Earth for recorded species, IUCN threat status, "
+        "and invasive species. Powered by GBIF's global biodiversity database "
+        "with over 2.4 billion occurrence records."
+        "</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        '<div class="eco-login-hero" style="padding-top:20px; padding-bottom:20px;">',
+        unsafe_allow_html=True,
+    )
+    fc1, fc2, fc3 = st.columns(3)
+    with fc1:
+        st.markdown(
+            '<div class="eco-feature-card">'
+            '<div class="eco-feature-num">500+</div>'
+            '<div class="eco-feature-label">Species per site</div>'
+            '<div class="eco-feature-desc">Detect all recorded species within a custom search radius</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    with fc2:
+        st.markdown(
+            '<div class="eco-feature-card">'
+            '<div class="eco-feature-num">IUCN</div>'
+            '<div class="eco-feature-label">Threat assessment</div>'
+            '<div class="eco-feature-desc">Automatic classification from Least Concern to Critically Endangered</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    with fc3:
+        st.markdown(
+            '<div class="eco-feature-card">'
+            '<div class="eco-feature-num">CSV</div>'
+            '<div class="eco-feature-label">Export reports</div>'
+            '<div class="eco-feature-desc">Download full species summaries and detailed observation records</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("")
+
+    tab_login, tab_signup = st.tabs(["Log in", "Sign up"])
+
+    with tab_login:
+        with st.form("login_form"):
+            email = st.text_input("Email", autocomplete="email")
+            password = st.text_input(
+                "Password", type="password", autocomplete="current-password"
+            )
+            submitted = st.form_submit_button("Log in", use_container_width=True)
+            if submitted:
+                try:
+                    resp = sign_in(email, password)
+                    st.session_state.authenticated = True
+                    st.session_state.user_id = resp.user.id
+                    st.session_state.user_email = resp.user.email
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+
+    with tab_signup:
+        with st.form("signup_form"):
+            new_email = st.text_input("Email", autocomplete="email")
+            new_password = st.text_input(
+                "Password", type="password", autocomplete="new-password"
+            )
+            confirm_password = st.text_input(
+                "Confirm password", type="password", autocomplete="new-password"
+            )
+            submitted = st.form_submit_button(
+                "Create account", use_container_width=True
+            )
+            if submitted:
+                if new_password != confirm_password:
+                    st.error("Passwords do not match.")
+                elif len(new_password) < 6:
+                    st.error("Password must be at least 6 characters.")
+                else:
+                    try:
+                        sign_up(new_email, new_password)
+                        resp = sign_in(new_email, new_password)
+                        st.session_state.authenticated = True
+                        st.session_state.user_id = resp.user.id
+                        st.session_state.user_email = resp.user.email
+                        st.rerun()
+                    except Exception as e:
+                        st.error(str(e))
+
+    st.stop()
+
+
 # ── Sidebar ──────────────────────────────────────────────────────────────────
+st.sidebar.markdown(f"Logged in as **{st.session_state.user_email}**")
+if st.sidebar.button("Log out"):
+    sign_out()
+    st.session_state.authenticated = False
+    st.session_state.user_id = None
+    st.session_state.user_email = None
+    st.rerun()
+
+with st.sidebar.expander("Recent searches", expanded=False):
+    history = get_search_history(st.session_state.user_id)
+    if history:
+        for h in history:
+            st.markdown(
+                f"**{h['lat']:.4f}, {h['lon']:.4f}** "
+                f"&middot; {h['radius_km']} km "
+                f"&middot; <span style='color:#888;font-size:0.8rem'>{h['searched_at'][:10]}</span>",
+                unsafe_allow_html=True,
+            )
+    else:
+        st.caption("No searches yet.")
+
+st.sidebar.markdown("---")
 st.sidebar.markdown("## SITE SELECTION")
 
 input_method = st.sidebar.radio(
@@ -145,24 +328,27 @@ run_query = st.sidebar.button(
 
 
 # ── Header ───────────────────────────────────────────────────────────────────
-st.markdown("# EcoStratum")
-st.markdown("##### Ecological Site Screener")
 st.markdown(
-    "Enter coordinates or click the map to define a site, set a search radius, "
-    "and generate an ecological screening of all recorded species. "
-    "Data sourced from [GBIF](https://www.gbif.org)."
+    '<p class="eco-app-title">EcoStratum</p>'
+    '<p class="eco-app-subtitle">'
+    "Ecological Site Screener &mdash; select a location, define a search radius, "
+    "and generate a biodiversity screening report. "
+    'Data sourced from <a href="https://www.gbif.org" target="_blank">GBIF</a>.'
+    "</p>",
+    unsafe_allow_html=True,
 )
 st.markdown("---")
 
 
 # ── Map input ────────────────────────────────────────────────────────────────
 if input_method == "Click on map":
-    m = folium.Map(location=[lat, lon], zoom_start=5, tiles="CartoDB positron")
+    m = folium.Map(location=[lat, lon], zoom_start=5, tiles=None)
     if st.session_state.clicked_lat:
         folium.Marker(
             [st.session_state.clicked_lat, st.session_state.clicked_lon],
             icon=folium.Icon(color="darkgreen", icon="circle", prefix="fa"),
         ).add_to(m)
+    add_tile_layers(m)
     map_data = st_folium(m, width=None, height=400, key="input_map")
 
     if map_data and map_data.get("last_clicked"):
@@ -209,6 +395,10 @@ if run_query:
         st.session_state.query_lon = lon
         st.session_state.query_buffer = buffer_km
         st.session_state.results_ready = True
+        try:
+            save_search(st.session_state.user_id, lat, lon, buffer_km)
+        except Exception:
+            pass
 
 
 # ── Results ──────────────────────────────────────────────────────────────────
@@ -261,12 +451,12 @@ if st.session_state.results_ready:
 
     # ── Occurrence map ───────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("### Occurrence map")
+    st.markdown("### Occurrence Map")
 
     map_df = raw_df.dropna(subset=["decimalLatitude", "decimalLongitude"])
     if not map_df.empty:
         occ_map = folium.Map(
-            location=[q_lat, q_lon], zoom_start=11, tiles="CartoDB positron",
+            location=[q_lat, q_lon], zoom_start=11, tiles=None,
         )
         folium.Circle(
             location=[q_lat, q_lon], radius=q_buffer * 1000,
@@ -289,44 +479,45 @@ if st.session_state.results_ready:
                 ),
             ).add_to(occ_map)
 
+        add_tile_layers(occ_map)
         st_folium(occ_map, width=None, height=480, key="result_map")
 
     # ── Threatened ───────────────────────────────────────────────────────
     if not threatened_df.empty:
         st.markdown("---")
-        st.markdown("### Threatened species (IUCN)")
+        st.markdown("### Threatened Species (IUCN)")
         cols = ["species", "common_name", "class", "family", "iucn_status", "iucn_label", "observation_count"]
         st.dataframe(
-            threatened_df[[c for c in cols if c in threatened_df.columns]].reset_index(drop=True),
+            _display_df(threatened_df, cols),
             use_container_width=True, hide_index=True,
         )
 
     # ── Invasive ─────────────────────────────────────────────────────────
     if not invasive_df.empty:
         st.markdown("---")
-        st.markdown("### Invasive and introduced species")
+        st.markdown("### Invasive and Introduced Species")
         cols = ["species", "common_name", "class", "family", "establishment_label", "observation_count"]
         st.dataframe(
-            invasive_df[[c for c in cols if c in invasive_df.columns]].reset_index(drop=True),
+            _display_df(invasive_df, cols),
             use_container_width=True, hide_index=True,
         )
 
     # ── Full species list ────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("### Complete species list")
+    st.markdown("### Complete Species List")
     display_cols = [
         "species", "common_name", "class", "order", "family",
         "iucn_label", "establishment_label",
         "observation_count", "first_observed", "last_observed",
     ]
     st.dataframe(
-        summary_df[[c for c in display_cols if c in summary_df.columns]].reset_index(drop=True),
+        _display_df(summary_df, display_cols),
         use_container_width=True, hide_index=True, height=400,
     )
 
     # ── Export ────────────────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown("### Export data")
+    st.markdown("### Export Data")
 
     dl1, dl2 = st.columns(2)
     with dl1:
@@ -356,6 +547,35 @@ if st.session_state.results_ready:
                 f"{len(detailed_export.columns)} fields per record"
             )
 
+    # ── Methodology ──────────────────────────────────────────────────────
+    st.markdown("---")
+    with st.expander("Methodology & Data Sources"):
+        st.markdown(
+            """
+**Data source.** All occurrence records are retrieved from the
+[Global Biodiversity Information Facility (GBIF)](https://www.gbif.org),
+an international network aggregating biodiversity data from institutions
+worldwide.
+
+**Search method.** EcoStratum queries the GBIF Occurrence API using a
+bounding-box approximation of the specified search radius around the
+target coordinates. Only georeferenced records without known geospatial
+issues are included.
+
+**IUCN Red List status.** Threat categories (CR, EN, VU, NT, LC) are
+derived from the `iucnRedListCategory` field in GBIF occurrence records.
+These may not reflect the most current IUCN assessment. For authoritative
+status, consult the [IUCN Red List](https://www.iucnredlist.org).
+
+**Limitations.** GBIF data reflects contributed observations and specimens.
+Absence of records does not confirm absence of a species. Observation
+density varies by region and taxonomic group.
+
+**Citation.** GBIF.org ({date.today().year}), GBIF Occurrence Download,
+accessed via EcoStratum.
+            """.strip()
+        )
+
 else:
     st.markdown(
         "Configure your site in the sidebar, then click **Run screening**."
@@ -364,4 +584,19 @@ else:
 
 # ── Footer ───────────────────────────────────────────────────────────────────
 st.markdown("---")
-st.caption("Data: GBIF (gbif.org) | EcoStratum v0.5")
+st.markdown(
+    '<div class="eco-footer">'
+    "Data: "
+    '<a href="https://www.gbif.org" target="_blank">Global Biodiversity Information Facility (GBIF)</a>'
+    '<div class="eco-footer-links">'
+    '<a href="https://www.gbif.org" target="_blank">GBIF</a>'
+    '<a href="https://github.com/briansmth/EcoStratum" target="_blank">GitHub</a>'
+    '<a href="https://www.linkedin.com/in/briansmth" target="_blank">LinkedIn</a>'
+    "</div>"
+    '<div class="eco-footer-note">'
+    "EcoStratum v1.1 &middot; Occurrence data may not reflect current species distributions. "
+    "For authoritative conservation assessments, consult the IUCN Red List."
+    "</div>"
+    "</div>",
+    unsafe_allow_html=True,
+)

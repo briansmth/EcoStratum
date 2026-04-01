@@ -4,3 +4,5 @@ plotly>=5.18
 requests>=2.31
 folium>=0.15
 streamlit-folium>=0.22
+supabase>=2.0
+python-dotenv>=1.0

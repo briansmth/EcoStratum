@@ -1,4 +1,4 @@
-/* EcoIntel — Professional styling */
+/* EcoStratum — Professional styling */
 
 h1 {
     font-weight: 700 !important;
@@ -66,6 +66,119 @@ button[data-testid="stDownloadButton"] {
     border: 1px solid #1a5c2e !important;
     color: #1a5c2e !important;
     font-weight: 600 !important;
+}
+
+/* Login hero section */
+.eco-login-hero {
+    background: linear-gradient(135deg, #0d2b1a 0%, #1a5c2e 50%, #2a7a42 100%);
+    border-radius: 12px;
+    padding: 40px 36px 32px;
+    margin-bottom: 24px;
+}
+
+.eco-hero-title {
+    font-size: 2.8rem !important;
+    font-weight: 800 !important;
+    color: #ffffff !important;
+    margin-bottom: 0 !important;
+    letter-spacing: -0.03em !important;
+}
+
+.eco-hero-tagline {
+    font-size: 1.15rem !important;
+    font-weight: 500 !important;
+    color: #c8e6c9 !important;
+    margin-top: 4px !important;
+    margin-bottom: 12px !important;
+}
+
+.eco-hero-desc {
+    font-size: 0.95rem;
+    color: #d4e8d4;
+    max-width: 680px;
+    line-height: 1.6;
+    margin-bottom: 0;
+}
+
+/* Feature cards */
+.eco-feature-card {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    padding: 20px 16px;
+    text-align: center;
+    min-height: 130px;
+}
+
+.eco-feature-num {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #ffffff;
+    line-height: 1.2;
+}
+
+.eco-feature-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #c8e6c9;
+    margin: 6px 0 4px;
+}
+
+.eco-feature-desc {
+    font-size: 0.78rem;
+    color: #a8cfa8;
+    line-height: 1.4;
+}
+
+/* App header (post-login) */
+.eco-app-title {
+    font-size: 1.8rem !important;
+    font-weight: 800 !important;
+    color: #1a5c2e !important;
+    margin-bottom: 0 !important;
+    letter-spacing: -0.02em !important;
+}
+
+.eco-app-subtitle {
+    font-size: 0.95rem;
+    color: #555;
+    margin-top: 2px;
+    margin-bottom: 0;
+}
+
+/* Footer */
+.eco-footer {
+    text-align: center;
+    padding: 24px 0 8px;
+    color: #777;
+    font-size: 0.82rem;
+    line-height: 1.8;
+}
+
+.eco-footer a {
+    color: #1a5c2e;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.eco-footer a:hover {
+    text-decoration: underline;
+}
+
+.eco-footer-links {
+    margin: 6px 0;
+}
+
+.eco-footer-links a {
+    margin: 0 12px;
+}
+
+.eco-footer-note {
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 4px;
 }
 
 #MainMenu {visibility: hidden;}
